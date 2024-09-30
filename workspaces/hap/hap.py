@@ -78,7 +78,7 @@ class HomeAutoPilot(object):
     def __train(self, train_data_loader, criterion_action, criterion_timing, criterion_device, optimizer, num_epochs=3):
         for epoch in range(num_epochs):
             self.model.train()
-        
+         
             for batch_idx, (inputs, y_act_device, y_act_state, y_timing, lengths) in tqdm(enumerate(train_data_loader)):
                 inputs, y_device, y_action, y_timing, lengths = (
                     inputs.float().to(self.device), 

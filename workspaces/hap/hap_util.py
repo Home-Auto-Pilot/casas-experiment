@@ -14,11 +14,29 @@ def read_and_clean(fname):
     df['dayofweek'] = df['datetime'].dt.day
     df['weekofmonth'] = (df['datetime'].dt.day - 1) // 7 + 1
     df['monthofyear'] = df['datetime'].dt.month
-    df_switches = df[df['state'].isin({'on', 'off'})]
-    df_sensors = df[df['entity_id'].str.contains("sensor")]
-    df_sensors = df_sensors[df_sensors['entity_id'].str.contains('status|last_seen') == False]
+    df_switches = __get_valid_switches(df)
+    df_sensors = __get_valid_sensors(df)
     return df_switches, df_sensors
 
+def __get_valid_switches(df):
+    # all `light.*` entities
+    lights_conditions = (df['entity_id'].str.startswith('light.'))
+    # all `switch.*` with either 'light' or 'switch'
+    switch_conditions = (df['entity_id'].str.startswith('switch.')) & ((df['entity_id'].str.contains('light')) | (df['entity_id'].str.contains('switch')))
+    # state is either on or off
+    state_conditions = (df['state'].isin({'on', 'off'}))
+    # find all
+    df_switches = df[(lights_conditions & state_conditions) | (switch_conditions & state_conditions)]
+    return df_switches
+
+def __get_valid_sensors(df):
+    # `sensor.` with humidity or temperature in name
+    hygrometer_conditions = (df['entity_id'].str.startswith('sensor.')) & ((df['entity_id'].str.contains('temperature')) | (df['entity_id'].str.contains('humidity')))
+    # binary sensors that has either motion or occupancy detected
+    camera_conditions = (df['entity_id'].str.startswith('binary_sensor.')) & ((df['entity_id'].str.contains('light')) | (df['entity_id'].str.contains('motion')))
+    df_sensors = df[hygrometer_conditions | camera_conditions]
+    return df_sensors
+    
 def combine_data(data_files):
     df_switches_list = []
     df_sensors_list = []
@@ -40,16 +58,13 @@ def combine_data(data_files):
     df_combined = df_combined.sort_values(by='datetime')
     return df_combined, df_sensors_combined, df_switches_combined, unique_sensor_states, unique_entity_ids, unique_event_states
 
-def build_sequence(data_files):
+def build_sequence(data_files, window_size_seconds = 600):
     df_combined, df_sensors_combined, df_switches_combined, unique_sensor_states, unique_entity_ids, unique_event_states = combine_data(data_files)
     timestamps = df_combined['datetime'].values
     data = df_combined.drop('datetime', axis=1).values 
     type_loc = df_combined.drop('datetime', axis=1).columns.get_loc('type')
     entity_id_loc = df_combined.drop('datetime', axis=1).columns.get_loc('entity_id')
     state_loc = df_combined.drop('datetime', axis=1).columns.get_loc('state')
-    # Parameters
-    window_size_seconds = 300  # 5 mins = 86400 seconds
-    step_size = 1  # 1-second step size
     
     # Prepare to store windows
     input_sequences = []
